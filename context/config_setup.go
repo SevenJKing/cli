@@ -26,7 +26,7 @@ var (
 
 // TODO: have a conversation about whether this belongs in the "context" package
 // FIXME: make testable
-func setupConfigFile(filename string) (*configEntry, error) {
+func setupConfigFile(filename string) (*Config, error) {
 	var verboseStream io.Writer
 	if strings.Contains(os.Getenv("DEBUG"), "oauth") {
 		verboseStream = os.Stderr
@@ -54,29 +54,35 @@ func setupConfigFile(filename string) (*configEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	entry := configEntry{
-		User:  userLogin,
-		Token: token,
+	config := defaultConfig()
+	config.Hosts = []*HostConfig{
+		&HostConfig{
+			Host: flow.Hostname,
+			Auths: []*AuthConfig{
+				&AuthConfig{
+					User:  userLogin,
+					Token: token,
+				},
+			},
+		},
 	}
-	data := make(map[string][]configEntry)
-	data[flow.Hostname] = []configEntry{entry}
 
 	err = os.MkdirAll(filepath.Dir(filename), 0771)
 	if err != nil {
 		return nil, err
 	}
 
-	config, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	cfgFile, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return nil, err
 	}
-	defer config.Close()
+	defer cfgFile.Close()
 
-	yamlData, err := yaml.Marshal(data)
+	yamlData, err := yaml.Marshal(config)
 	if err != nil {
 		return nil, err
 	}
-	n, err := config.Write(yamlData)
+	n, err := cfgFile.Write(yamlData)
 	if err == nil && n < len(yamlData) {
 		err = io.ErrShortWrite
 	}
@@ -86,7 +92,7 @@ func setupConfigFile(filename string) (*configEntry, error) {
 		waitForEnter(os.Stdin)
 	}
 
-	return &entry, err
+	return &config, err
 }
 
 func getViewer(token string) (string, error) {

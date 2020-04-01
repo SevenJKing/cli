@@ -13,35 +13,15 @@ import (
 
 const defaultHostname = "github.com"
 
-type configEntry struct {
-	User  string
-	Token string `yaml:"oauth_token"`
-}
-
-/*
-
-Problem: the config file is treated as exclusively an auth config right now. We hardcode our parsing to the current structure, precluding handling of other keys.
-
-I can take a few approaches:
-
- 1. keep this code the same but target auth.yml and make the variables auth specific
- 2. update this code to do the same stuff but operate on a top level auth key
-
-And in the background I'm nervous that we won't be able to preserve comments when writing the config
-back out. I want to test that hypothesis; but I think the higher priority is getting the auth config
-corded off.
-
-*/
-
-func parseOrSetupConfigFile(fn string) (*configEntry, error) {
-	entry, err := parseConfigFile(fn)
+func parseOrSetupConfigFile(fn string) (*Config, error) {
+	config, err := parseConfigFile(fn)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return setupConfigFile(fn)
 	}
-	return entry, err
+	return config, err
 }
 
-func parseConfigFile(fn string) (*configEntry, error) {
+func parseConfigFile(fn string) (*Config, error) {
 	f, err := os.Open(fn)
 	if err != nil {
 		return nil, err
@@ -51,7 +31,7 @@ func parseConfigFile(fn string) (*configEntry, error) {
 }
 
 // ParseDefaultConfig reads the configuration file
-func ParseDefaultConfig() (*configEntry, error) {
+func ParseDefaultConfig() (*Config, error) {
 	return parseConfigFile(configFile())
 }
 
@@ -81,6 +61,10 @@ func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
 	return nil, errors.New("not found")
 }
 
+func (c *Config) DefaultHostConfig() (*HostConfig, error) {
+	return c.ConfigForHost(defaultHostname)
+}
+
 func defaultConfig() Config {
 	return Config{
 		Protocol: "https",
@@ -88,7 +72,7 @@ func defaultConfig() Config {
 	}
 }
 
-func parseConfig(r io.Reader) (*configEntry, error) {
+func parseConfig(r io.Reader) (*Config, error) {
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -109,39 +93,39 @@ func parseConfig(r io.Reader) (*configEntry, error) {
 
 	// TODO
 
-	// - [ ] make hosts: nesting format work with new parsing code and config struct
+	// - [x] make hosts: nesting format work with new parsing code and config struct
 	// - [ ] support setting editor (or protocol)
 	// - [ ] implement new commands
 	// - [ ] migration code for old (non-hosts) config
 
-	for i, v := range root.Content[0].Content {
+	topLevelKeys := root.Content[0].Content
+
+	for i, v := range topLevelKeys {
 		switch v.Value {
 		case "hosts":
-			fmt.Printf("found hosts config at position %d\n", i)
-			fmt.Println(root.Content[0].Content[i+1].Content)
-			for j, v := range root.Content[0].Content[i+1].Content {
-				// access a +1 to get to the array of configs oof
+			// hosts is a map of hostname -> arrays of user auth configs
+			for j, v := range topLevelKeys[i+1].Content {
 				if v.Value == "" {
-					fmt.Println("EMPTY")
-					fmt.Println(v.Content[0].Content[0].Value)
+					continue
 				}
-				fmt.Println("host key at", j, v.Value)
-				// now, loop over authconfig entries
-				fmt.Println(v.Content)
-				for n, v := range v.Content {
-					fmt.Println("at", n, v)
+				hostConfig := HostConfig{}
+				hostConfig.Host = v.Value
+				authsRoot := topLevelKeys[i+1].Content[j+1]
+				// Each one of these is a map that holds user/oauth_token
+				for _, v := range authsRoot.Content {
+					authConfig := AuthConfig{}
+					authRoot := v.Content
+					for y := 0; y < len(authRoot)-1; y = y + 2 {
+						switch authRoot[y].Value {
+						case "user":
+							authConfig.User = authRoot[y+1].Value
+						case "oauth_token":
+							authConfig.Token = authRoot[y+1].Value
+						}
+					}
+					hostConfig.Auths = append(hostConfig.Auths, &authConfig)
 				}
-				//for j := 0; j < len(root.Content[0].Content[i+1].Content)-1; j = j + 2 {
-				//fmt.Println("value:", root.Content[0].Content[i].Content[j].Value)
-
-				//if config.Content[0].Content[i].Value == defaultHostname {
-				//	var entries []configEntry
-				//	err = config.Content[0].Content[i+1].Decode(&entries)
-				//	if err != nil {
-				//		return nil, err
-				//	}
-				//	return &entries[0], nil
-				//}
+				config.Hosts = append(config.Hosts, &hostConfig)
 			}
 		case "protocol":
 			protocolValue := root.Content[0].Content[i+1].Value
@@ -150,7 +134,7 @@ func parseConfig(r io.Reader) (*configEntry, error) {
 			}
 			config.Protocol = protocolValue
 			// TODO fucking with it to test writing back out
-			root.Content[0].Content[i+1].Value = "LOL"
+			// root.Content[0].Content[i+1].Value = "LOL"
 		case "editor":
 			editorValue := root.Content[0].Content[i+1].Value
 			if !filepath.IsAbs(editorValue) {
@@ -162,12 +146,12 @@ func parseConfig(r io.Reader) (*configEntry, error) {
 			fmt.Println("but alias support is not implemented yet sorry")
 		}
 	}
-	fmt.Printf("%#v\n", config)
+	// TODO writing back out to test comment preservation
 	//out, err := yaml.Marshal(&root)
 	//if err != nil {
 	//	return nil, err
 	//}
 	//fmt.Println(string(out))
 
-	return nil, fmt.Errorf("could not find config entry for %q", defaultHostname)
+	return &config, nil
 }
