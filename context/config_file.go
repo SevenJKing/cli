@@ -90,6 +90,7 @@ func parseConfig(r io.Reader) (*Config, error) {
 	}
 
 	config := defaultConfig()
+	config.Root = &root
 
 	// TODO
 
