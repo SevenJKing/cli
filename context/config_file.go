@@ -116,8 +116,9 @@ func parseConfig(r io.Reader) (*Config, error) {
 				for _, v := range authsRoot.Content {
 					authConfig := AuthConfig{}
 					authRoot := v.Content
-					for y := 0; y < len(authRoot)-1; y = y + 2 {
-						switch authRoot[y].Value {
+					// This is a map of user/token values
+					for y, v := range authRoot {
+						switch v.Value {
 						case "user":
 							authConfig.User = authRoot[y+1].Value
 						case "oauth_token":
@@ -129,7 +130,7 @@ func parseConfig(r io.Reader) (*Config, error) {
 				config.Hosts = append(config.Hosts, &hostConfig)
 			}
 		case "protocol":
-			protocolValue := root.Content[0].Content[i+1].Value
+			protocolValue := topLevelKeys[i+1].Value
 			if protocolValue != "ssh" && protocolValue != "https" {
 				return nil, fmt.Errorf("got unexpected value for protocol: %s", protocolValue)
 			}
@@ -137,14 +138,11 @@ func parseConfig(r io.Reader) (*Config, error) {
 			// TODO fucking with it to test writing back out
 			// root.Content[0].Content[i+1].Value = "LOL"
 		case "editor":
-			editorValue := root.Content[0].Content[i+1].Value
+			editorValue := topLevelKeys[i+1].Value
 			if !filepath.IsAbs(editorValue) {
 				return nil, fmt.Errorf("editor should be an absolute path; got: %s", editorValue)
 			}
 			config.Editor = editorValue
-		case "aliases":
-			fmt.Printf("found alias config at position %d\n", i)
-			fmt.Println("but alias support is not implemented yet sorry")
 		}
 	}
 	// TODO writing back out to test comment preservation
