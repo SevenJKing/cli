@@ -58,7 +58,7 @@ func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
 			return hc, nil
 		}
 	}
-	return nil, errors.New("not found")
+	return nil, fmt.Errorf("could not find config entry for \"%s\"", hostname)
 }
 
 func (c *Config) DefaultHostConfig() (*HostConfig, error) {

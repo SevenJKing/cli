@@ -16,40 +16,48 @@ func eq(t *testing.T, got interface{}, expected interface{}) {
 
 func Test_parseConfig(t *testing.T) {
 	c := strings.NewReader(`---
-github.com:
-- user: monalisa
-  oauth_token: OTOKEN
-  protocol: https
-- user: wronguser
-  oauth_token: NOTTHIS
+hosts:
+  github.com:
+  - user: monalisa
+    oauth_token: OTOKEN
+  - user: wronguser
+    oauth_token: NOTTHIS
 `)
-	entry, err := parseConfig(c)
+	config, err := parseConfig(c)
 	eq(t, err, nil)
-	eq(t, entry.User, "monalisa")
-	eq(t, entry.Token, "OTOKEN")
+	hostConfig, err := config.DefaultHostConfig()
+	eq(t, err, nil)
+	eq(t, hostConfig.Auths[0].User, "monalisa")
+	eq(t, hostConfig.Auths[0].Token, "OTOKEN")
 }
 
 func Test_parseConfig_multipleHosts(t *testing.T) {
 	c := strings.NewReader(`---
-example.com:
-- user: wronguser
-  oauth_token: NOTTHIS
-github.com:
-- user: monalisa
-  oauth_token: OTOKEN
+hosts:
+  example.com:
+  - user: wronguser
+    oauth_token: NOTTHIS
+  github.com:
+  - user: monalisa
+    oauth_token: OTOKEN
 `)
-	entry, err := parseConfig(c)
+	config, err := parseConfig(c)
 	eq(t, err, nil)
-	eq(t, entry.User, "monalisa")
-	eq(t, entry.Token, "OTOKEN")
+	hostConfig, err := config.DefaultHostConfig()
+	eq(t, err, nil)
+	eq(t, hostConfig.Auths[0].User, "monalisa")
+	eq(t, hostConfig.Auths[0].Token, "OTOKEN")
 }
 
 func Test_parseConfig_notFound(t *testing.T) {
 	c := strings.NewReader(`---
-example.com:
-- user: wronguser
-  oauth_token: NOTTHIS
+hosts:
+  example.com:
+  - user: wronguser
+    oauth_token: NOTTHIS
 `)
-	_, err := parseConfig(c)
+	config, err := parseConfig(c)
+	eq(t, err, nil)
+	_, err = config.DefaultHostConfig()
 	eq(t, err, errors.New(`could not find config entry for "github.com"`))
 }
