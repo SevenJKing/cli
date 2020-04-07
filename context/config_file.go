@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -14,25 +15,16 @@ import (
 const defaultHostname = "github.com"
 
 func parseOrSetupConfigFile(fn string) (*Config, error) {
-	config, err := parseConfigFile(fn)
+	config, err := parseConfig(fn)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return setupConfigFile(fn)
 	}
 	return config, err
 }
 
-func parseConfigFile(fn string) (*Config, error) {
-	f, err := os.Open(fn)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return parseConfig(f)
-}
-
 // ParseDefaultConfig reads the configuration file
 func ParseDefaultConfig() (*Config, error) {
-	return parseConfigFile(configFile())
+	return parseConfig(configFile())
 }
 
 type AuthConfig struct {
@@ -72,32 +64,93 @@ func defaultConfig() Config {
 	}
 }
 
-func parseConfig(r io.Reader) (*Config, error) {
-	data, err := ioutil.ReadAll(r)
+func migrateConfig(cfgFilename string, data []byte, root *yaml.Node) (bool, error) {
+	for _, v := range root.Content[0].Content {
+		if v.Value == "hosts" {
+			return false, nil
+		}
+	}
+
+	fmt.Fprintln(os.Stderr, "info: migrating config from old to new format")
+
+	newConfig := "hosts:\n"
+	for _, line := range strings.Split(string(data), "\n") {
+		newConfig += fmt.Sprintf("  %s\n", line)
+	}
+
+	err := os.Rename(cfgFilename, cfgFilename+".bak")
 	if err != nil {
-		return nil, err
+		return false, fmt.Errorf("failed to back up existing config: %s", err)
+	}
+
+	cfgFile, err := os.OpenFile(cfgFilename, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
+	if err != nil {
+		return false, fmt.Errorf("failed to open new config file for writing: %s", err)
+	}
+	defer cfgFile.Close()
+
+	n, err := cfgFile.WriteString(newConfig)
+	if err == nil && n < len(newConfig) {
+		err = io.ErrShortWrite
+	}
+
+	if err != nil {
+		return false, err
+	}
+
+	return true, nil
+}
+
+// TODO this approach is bad; this function does too much and now parseConfig can't be handed some
+// content in tests. Refactor to 1) have a better signature and 2) re-enable the testing approach we
+// already have.
+
+func readConfig(fn string) ([]byte, *yaml.Node, error) {
+	f, err := os.Open(fn)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer f.Close()
+
+	data, err := ioutil.ReadAll(f)
+	if err != nil {
+		return data, nil, err
 	}
 	var root yaml.Node
 	err = yaml.Unmarshal(data, &root)
 	if err != nil {
-		return nil, err
+		return data, nil, err
 	}
 	if len(root.Content) < 1 {
-		return nil, fmt.Errorf("malformed config")
+		return data, &root, fmt.Errorf("malformed config")
 	}
 	if root.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("expected a top level map")
+		return data, &root, fmt.Errorf("expected a top level map")
+	}
+
+	return data, &root, nil
+}
+
+func parseConfig(fn string) (*Config, error) {
+	data, root, err := readConfig(fn)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read config: %s", err)
+	}
+
+	migrated, err := migrateConfig(configFile(), data, root)
+	if err != nil {
+		return nil, fmt.Errorf("failed to migrate config: %s", err)
+	}
+
+	if migrated {
+		data, root, err = readConfig(fn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to re-read config after migration: %s", err)
+		}
 	}
 
 	config := defaultConfig()
-	config.Root = &root
-
-	// TODO
-
-	// - [x] make hosts: nesting format work with new parsing code and config struct
-	// - [ ] support setting editor (or protocol)
-	// - [ ] implement new commands
-	// - [ ] migration code for old (non-hosts) config
+	config.Root = root
 
 	topLevelKeys := root.Content[0].Content
 
