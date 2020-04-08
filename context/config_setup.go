@@ -54,17 +54,22 @@ func setupConfigFile(filename string) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	config := defaultConfig()
-	config.Hosts = []*HostConfig{
-		&HostConfig{
-			Host: flow.Hostname,
-			Auths: []*AuthConfig{
-				&AuthConfig{
-					User:  userLogin,
-					Token: token,
-				},
-			},
+
+	// TODO this sucks. It precludes us laying out a nice config with comments and such.
+	type yamlConfig struct {
+		Hosts map[string][]*AuthConfig
+	}
+
+	yamlHosts := map[string][]*AuthConfig{}
+	yamlHosts[flow.Hostname] = []*AuthConfig{
+		&AuthConfig{
+			User:  userLogin,
+			Token: token,
 		},
+	}
+
+	defaultConfig := yamlConfig{
+		Hosts: yamlHosts,
 	}
 
 	err = os.MkdirAll(filepath.Dir(filename), 0771)
@@ -78,7 +83,7 @@ func setupConfigFile(filename string) (*Config, error) {
 	}
 	defer cfgFile.Close()
 
-	yamlData, err := yaml.Marshal(config)
+	yamlData, err := yaml.Marshal(defaultConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +92,15 @@ func setupConfigFile(filename string) (*Config, error) {
 		err = io.ErrShortWrite
 	}
 
-	if err == nil {
-		fmt.Fprintln(os.Stderr, "Authentication complete. Press Enter to continue... ")
-		waitForEnter(os.Stdin)
+	if err != nil {
+		return nil, err
 	}
 
-	return &config, err
+	fmt.Fprintln(os.Stderr, "Authentication complete. Press Enter to continue... ")
+	waitForEnter(os.Stdin)
+
+	// TODO cleaner error handling? this "should" always work given that we /just/ wrote the file...
+	return parseConfig(filename)
 }
 
 func getViewer(token string) (string, error) {
