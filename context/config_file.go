@@ -25,10 +25,10 @@ type HostConfig struct {
 }
 
 type Config struct {
-	Root     *yaml.Node
-	Hosts    []*HostConfig
-	Editor   string
-	Protocol string
+	Root        *yaml.Node
+	Hosts       []*HostConfig
+	Editor      string
+	GitProtocol string
 }
 
 func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
@@ -37,7 +37,7 @@ func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
 			return hc, nil
 		}
 	}
-	return nil, fmt.Errorf("could not find config entry for \"%s\"", hostname)
+	return nil, fmt.Errorf("could not find config entry for %q", hostname)
 }
 
 func (c *Config) DefaultHostConfig() (*HostConfig, error) {
@@ -59,7 +59,7 @@ func ParseDefaultConfig() (*Config, error) {
 
 func defaultConfig() Config {
 	return Config{
-		Protocol: "https",
+		GitProtocol: "https",
 		// we leave editor as empty string to signal that we should use environment variables
 	}
 }
@@ -188,12 +188,12 @@ func parseConfig(fn string) (*Config, error) {
 				}
 				config.Hosts = append(config.Hosts, &hostConfig)
 			}
-		case "protocol":
+		case "git_protocol":
 			protocolValue := topLevelKeys[i+1].Value
 			if protocolValue != "ssh" && protocolValue != "https" {
 				return nil, fmt.Errorf("got unexpected value for protocol: %s", protocolValue)
 			}
-			config.Protocol = protocolValue
+			config.GitProtocol = protocolValue
 		case "editor":
 			editorValue := topLevelKeys[i+1].Value
 			if !filepath.IsAbs(editorValue) {
