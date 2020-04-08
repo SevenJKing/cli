@@ -14,19 +14,6 @@ import (
 
 const defaultHostname = "github.com"
 
-func parseOrSetupConfigFile(fn string) (*Config, error) {
-	config, err := parseConfig(fn)
-	if err != nil && errors.Is(err, os.ErrNotExist) {
-		return setupConfigFile(fn)
-	}
-	return config, err
-}
-
-// ParseDefaultConfig reads the configuration file
-func ParseDefaultConfig() (*Config, error) {
-	return parseConfig(configFile())
-}
-
 type AuthConfig struct {
 	User  string
 	Token string
@@ -55,6 +42,19 @@ func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
 
 func (c *Config) DefaultHostConfig() (*HostConfig, error) {
 	return c.ConfigForHost(defaultHostname)
+}
+
+func parseOrSetupConfigFile(fn string) (*Config, error) {
+	config, err := parseConfig(fn)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		return setupConfigFile(fn)
+	}
+	return config, err
+}
+
+// ParseDefaultConfig reads the configuration file
+func ParseDefaultConfig() (*Config, error) {
+	return parseConfig(configFile())
 }
 
 func defaultConfig() Config {
@@ -99,16 +99,6 @@ func migrateConfig(cfgFilename string, data []byte, root *yaml.Node) (bool, erro
 	}
 
 	return true, nil
-}
-
-func configReader(fn string) (io.Reader, error) {
-	f, err := os.Open(fn)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	return io.Reader(f), nil
 }
 
 var readConfig = func(fn string) ([]byte, error) {
@@ -204,8 +194,6 @@ func parseConfig(fn string) (*Config, error) {
 				return nil, fmt.Errorf("got unexpected value for protocol: %s", protocolValue)
 			}
 			config.Protocol = protocolValue
-			// TODO fucking with it to test writing back out
-			// root.Content[0].Content[i+1].Value = "LOL"
 		case "editor":
 			editorValue := topLevelKeys[i+1].Value
 			if !filepath.IsAbs(editorValue) {
@@ -214,12 +202,6 @@ func parseConfig(fn string) (*Config, error) {
 			config.Editor = editorValue
 		}
 	}
-	// TODO writing back out to test comment preservation
-	//out, err := yaml.Marshal(&root)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//fmt.Println(string(out))
 
 	return &config, nil
 }
