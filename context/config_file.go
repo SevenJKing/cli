@@ -32,6 +32,41 @@ type Config struct {
 	gitProtocol string
 }
 
+func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
+	hosts, err := c.Hosts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse hosts config: %s", err)
+	}
+
+	for _, hc := range hosts {
+		if hc.Host == hostname {
+			return hc, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find config entry for %q", hostname)
+}
+
+func (c *Config) DefaultHostConfig() (*HostConfig, error) {
+	return c.ConfigForHost(defaultHostname)
+}
+
+func (c *Config) findEntry(key string) (*yaml.Node, error) {
+	topLevelKeys := c.Root.Content[0].Content
+	var entry *yaml.Node
+	for i, v := range topLevelKeys {
+		if v.Value == key {
+			// TODO bound check
+			entry = topLevelKeys[i+1]
+		}
+	}
+
+	if entry == nil {
+		return nil, errors.New("not found")
+	}
+
+	return entry, nil
+}
+
 func (c *Config) Hosts() ([]*HostConfig, error) {
 	if len(c.hosts) > 0 {
 		return c.hosts, nil
@@ -73,42 +108,6 @@ func (c *Config) Hosts() ([]*HostConfig, error) {
 
 	return hostConfigs, nil
 }
-
-func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
-	hosts, err := c.Hosts()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse hosts config: %s", err)
-	}
-
-	for _, hc := range hosts {
-		if hc.Host == hostname {
-			return hc, nil
-		}
-	}
-	return nil, fmt.Errorf("could not find config entry for %q", hostname)
-}
-
-func (c *Config) DefaultHostConfig() (*HostConfig, error) {
-	return c.ConfigForHost(defaultHostname)
-}
-
-func (c *Config) findEntry(key string) (*yaml.Node, error) {
-	topLevelKeys := c.Root.Content[0].Content
-	var entry *yaml.Node
-	for i, v := range topLevelKeys {
-		if v.Value == key {
-			// TODO bound check
-			entry = topLevelKeys[i+1]
-		}
-	}
-
-	if entry == nil {
-		return nil, errors.New("not found")
-	}
-
-	return entry, nil
-}
-
 func (c *Config) Editor() (string, error) {
 	if c.editor != "" { // TODO overlap with not found case
 		return c.editor, nil
