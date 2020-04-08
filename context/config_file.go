@@ -101,21 +101,37 @@ func migrateConfig(cfgFilename string, data []byte, root *yaml.Node) (bool, erro
 	return true, nil
 }
 
-// TODO this approach is bad; this function does too much and now parseConfig can't be handed some
-// content in tests. Refactor to 1) have a better signature and 2) re-enable the testing approach we
-// already have.
-
-func readConfig(fn string) ([]byte, *yaml.Node, error) {
+func configReader(fn string) (io.Reader, error) {
 	f, err := os.Open(fn)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
+	}
+	defer f.Close()
+
+	return io.Reader(f), nil
+}
+
+var readConfig = func(fn string) ([]byte, error) {
+	f, err := os.Open(fn)
+	if err != nil {
+		return nil, err
 	}
 	defer f.Close()
 
 	data, err := ioutil.ReadAll(f)
 	if err != nil {
-		return data, nil, err
+		return nil, err
 	}
+
+	return data, nil
+}
+
+func parseConfigFile(fn string) ([]byte, *yaml.Node, error) {
+	data, err := readConfig(fn)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	var root yaml.Node
 	err = yaml.Unmarshal(data, &root)
 	if err != nil {
@@ -132,7 +148,7 @@ func readConfig(fn string) ([]byte, *yaml.Node, error) {
 }
 
 func parseConfig(fn string) (*Config, error) {
-	data, root, err := readConfig(fn)
+	data, root, err := parseConfigFile(fn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read config: %s", err)
 	}
@@ -143,7 +159,7 @@ func parseConfig(fn string) (*Config, error) {
 	}
 
 	if migrated {
-		data, root, err = readConfig(fn)
+		data, root, err = parseConfigFile(fn)
 		if err != nil {
 			return nil, fmt.Errorf("failed to re-read config after migration: %s", err)
 		}
