@@ -108,6 +108,7 @@ func (c *Config) Hosts() ([]*HostConfig, error) {
 
 	return hostConfigs, nil
 }
+
 func (c *Config) Editor() (string, error) {
 	if c.editor != "" { // TODO overlap with not found case
 		return c.editor, nil
