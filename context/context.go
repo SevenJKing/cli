@@ -151,7 +151,7 @@ func New() Context {
 
 // A Context implementation that queries the filesystem
 type fsContext struct {
-	config    *Config
+	config    Config
 	remotes   Remotes
 	branch    string
 	baseRepo  ghrepo.Interface
@@ -167,7 +167,7 @@ func configFile() string {
 	return path.Join(ConfigDir(), "config.yml")
 }
 
-func (c *fsContext) getConfig() (*Config, error) {
+func (c *fsContext) getConfig() (Config, error) {
 	if c.config == nil {
 		config, err := parseOrSetupConfigFile(configFile())
 		if err != nil {

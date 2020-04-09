@@ -11,7 +11,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func parseOrSetupConfigFile(fn string) (*Config, error) {
+func parseOrSetupConfigFile(fn string) (Config, error) {
 	config, err := parseConfig(fn)
 	if err != nil && errors.Is(err, os.ErrNotExist) {
 		return setupConfigFile(fn)
@@ -19,7 +19,7 @@ func parseOrSetupConfigFile(fn string) (*Config, error) {
 	return config, err
 }
 
-func ParseDefaultConfig() (*Config, error) {
+func ParseDefaultConfig() (Config, error) {
 	return parseConfig(configFile())
 }
 
@@ -96,12 +96,31 @@ func parseConfigFile(fn string) ([]byte, *yaml.Node, error) {
 	return data, &root, nil
 }
 
-func parseConfig(fn string) (*Config, error) {
+func parseConfig(fn string) (Config, error) {
 	data, root, err := parseConfigFile(fn)
 	if err != nil {
 		return nil, err
 	}
 
+	legacyConfig := true
+	for _, v := range root.Content[0].Content {
+		if v.Value == "hosts" {
+			legacyConfig = false
+		}
+	}
+
+	if legacyConfig {
+		// so now that i switched to lazy parsing i have to do something about reading old configs. root
+		// is poisoned and the lazy parsing will fail for legacy config. i can:
+		// - have a whole separate LazyConfig type
+		// wait i wanted a Config interface anyway; why not use a different type?
+		// going to try:
+		// - Config interface
+		// - FileConfig type
+		// - LegacyConfig type
+	}
+
+	// TODO just read legacy config. don't worry about migration until a write is required.
 	migrated, err := migrateConfig(configFile(), data, root)
 	if err != nil {
 		return nil, fmt.Errorf("failed to migrate config: %s", err)
@@ -114,8 +133,7 @@ func parseConfig(fn string) (*Config, error) {
 		}
 	}
 
-	config := Config{}
-	config.Root = root
+	config := NewConfig(root)
 
-	return &config, nil
+	return config, nil
 }

@@ -9,6 +9,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type Config interface {
+	Editor() (string, error)
+	GitProtocol() (string, error)
+	Hosts() ([]*HostConfig, error)
+	ConfigForHost(string) (*HostConfig, error)
+	DefaultHostConfig() (*HostConfig, error)
+}
+
 const defaultHostname = "github.com"
 const defaultGitProtocol = "https"
 
@@ -22,14 +30,18 @@ type HostConfig struct {
 	Auths []*AuthConfig
 }
 
-type Config struct {
+func NewConfig(root *yaml.Node) Config {
+	return &fileConfig{Root: root}
+}
+
+type fileConfig struct {
 	Root        *yaml.Node
 	hosts       []*HostConfig
 	editor      string
 	gitProtocol string
 }
 
-func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
+func (c *fileConfig) ConfigForHost(hostname string) (*HostConfig, error) {
 	hosts, err := c.Hosts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse hosts config: %s", err)
@@ -43,11 +55,11 @@ func (c *Config) ConfigForHost(hostname string) (*HostConfig, error) {
 	return nil, fmt.Errorf("could not find config entry for %q", hostname)
 }
 
-func (c *Config) DefaultHostConfig() (*HostConfig, error) {
+func (c *fileConfig) DefaultHostConfig() (*HostConfig, error) {
 	return c.ConfigForHost(defaultHostname)
 }
 
-func (c *Config) findEntry(key string) (*yaml.Node, error) {
+func (c *fileConfig) findEntry(key string) (*yaml.Node, error) {
 	topLevelKeys := c.Root.Content[0].Content
 	var entry *yaml.Node
 	for i, v := range topLevelKeys {
@@ -64,7 +76,7 @@ func (c *Config) findEntry(key string) (*yaml.Node, error) {
 	return entry, nil
 }
 
-func (c *Config) Hosts() ([]*HostConfig, error) {
+func (c *fileConfig) Hosts() ([]*HostConfig, error) {
 	if len(c.hosts) > 0 {
 		return c.hosts, nil
 	}
@@ -106,7 +118,7 @@ func (c *Config) Hosts() ([]*HostConfig, error) {
 	return hostConfigs, nil
 }
 
-func (c *Config) Editor() (string, error) {
+func (c *fileConfig) Editor() (string, error) {
 	if c.editor != "" { // TODO overlap with not found case
 		return c.editor, nil
 	}
@@ -127,7 +139,7 @@ func (c *Config) Editor() (string, error) {
 	return editorValue, nil
 }
 
-func (c *Config) GitProtocol() (string, error) {
+func (c *fileConfig) GitProtocol() (string, error) {
 	if c.gitProtocol != "" {
 		return c.gitProtocol, nil
 	}
@@ -144,4 +156,38 @@ func (c *Config) GitProtocol() (string, error) {
 	c.gitProtocol = gitProtocolValue
 
 	return gitProtocolValue, nil
+}
+
+type LegacyConfig struct {
+	hosts []*HostConfig
+}
+
+func (lc *LegacyConfig) Editor() (string, error) {
+	return "", nil
+}
+
+func (lc *LegacyConfig) GitProtocol() (string, error) {
+	return "https", nil
+}
+
+func (lc *LegacyConfig) ConfigForHost(hostname string) (*HostConfig, error) {
+	hosts, err := lc.Hosts()
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse hosts config: %s", err)
+	}
+
+	for _, hc := range hosts {
+		if hc.Host == hostname {
+			return hc, nil
+		}
+	}
+	return nil, fmt.Errorf("could not find config entry for %q", hostname)
+}
+
+func (lc *LegacyConfig) DefaultHostConfig() (*HostConfig, error) {
+	return lc.ConfigForHost(defaultHostname)
+}
+
+func (lc *LegacyConfig) Hosts() ([]*HostConfig, error) {
+	// TODO
 }
