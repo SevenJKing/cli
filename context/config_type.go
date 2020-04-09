@@ -59,6 +59,38 @@ func (c *fileConfig) DefaultHostConfig() (*HostConfig, error) {
 	return c.ConfigForHost(defaultHostname)
 }
 
+func parseHosts(hostsEntry *yaml.Node) ([]*HostConfig, error) {
+	hostConfigs := []*HostConfig{}
+
+	for i, v := range hostsEntry.Content {
+		if v.Value == "" {
+			continue
+		}
+		hostConfig := HostConfig{}
+		hostConfig.Host = v.Value
+		// TODO bound check
+		authsRoot := hostsEntry.Content[i+1]
+		for _, v := range authsRoot.Content {
+			authConfig := AuthConfig{}
+			authRoot := v.Content
+			for j, v := range authRoot {
+				switch v.Value {
+				case "user":
+					// TODO bound check
+					authConfig.User = authRoot[j+1].Value
+				case "oauth_token":
+					// TODO bound check
+					authConfig.Token = authRoot[j+1].Value
+				}
+			}
+			hostConfig.Auths = append(hostConfig.Auths, &authConfig)
+		}
+		hostConfigs = append(hostConfigs, &hostConfig)
+	}
+
+	return hostConfigs, nil
+}
+
 func (c *fileConfig) findEntry(key string) (*yaml.Node, error) {
 	topLevelKeys := c.Root.Content[0].Content
 	var entry *yaml.Node
@@ -80,37 +112,15 @@ func (c *fileConfig) Hosts() ([]*HostConfig, error) {
 	if len(c.hosts) > 0 {
 		return c.hosts, nil
 	}
-	hostConfigs := []*HostConfig{}
 
 	hostsEntry, err := c.findEntry("hosts")
 	if err != nil {
-		return nil, fmt.Errorf("could not parse hosts config: %s", err)
+		return nil, fmt.Errorf("could not find hosts config: %s", err)
 	}
 
-	for j, v := range hostsEntry.Content {
-		if v.Value == "" {
-			continue
-		}
-		hostConfig := HostConfig{}
-		hostConfig.Host = v.Value
-		// TODO bound check
-		authsRoot := hostsEntry.Content[j+1]
-		for _, v := range authsRoot.Content {
-			authConfig := AuthConfig{}
-			authRoot := v.Content
-			for y, v := range authRoot {
-				switch v.Value {
-				case "user":
-					// TODO bound check
-					authConfig.User = authRoot[y+1].Value
-				case "oauth_token":
-					// TODO bound check
-					authConfig.Token = authRoot[y+1].Value
-				}
-			}
-			hostConfig.Auths = append(hostConfig.Auths, &authConfig)
-		}
-		hostConfigs = append(hostConfigs, &hostConfig)
+	hostConfigs, err := parseHosts(hostsEntry)
+	if err != nil {
+		return nil, fmt.Errorf("could not parse hosts config: %s", err)
 	}
 
 	c.hosts = hostConfigs
@@ -158,7 +168,12 @@ func (c *fileConfig) GitProtocol() (string, error) {
 	return gitProtocolValue, nil
 }
 
+func NewLegacyConfig(root *yaml.Node) Config {
+	return &LegacyConfig{Root: root}
+}
+
 type LegacyConfig struct {
+	Root  *yaml.Node
 	hosts []*HostConfig
 }
 
@@ -189,5 +204,16 @@ func (lc *LegacyConfig) DefaultHostConfig() (*HostConfig, error) {
 }
 
 func (lc *LegacyConfig) Hosts() ([]*HostConfig, error) {
-	// TODO
+	if len(lc.hosts) > 0 {
+		return lc.hosts, nil
+	}
+
+	hostConfigs, err := parseHosts(lc.Root.Content[0])
+	if err != nil {
+		return nil, fmt.Errorf("could not parse hosts config: %s", err)
+	}
+
+	lc.hosts = hostConfigs
+
+	return hostConfigs, nil
 }
