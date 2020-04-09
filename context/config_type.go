@@ -186,6 +186,7 @@ func (lc *LegacyConfig) GitProtocol() (string, error) {
 }
 
 func (lc *LegacyConfig) ConfigForHost(hostname string) (*HostConfig, error) {
+	// TODO duped code
 	hosts, err := lc.Hosts()
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse hosts config: %s", err)
