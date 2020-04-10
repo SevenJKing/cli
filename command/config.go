@@ -49,7 +49,9 @@ func configGet(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println(val)
+	if val != "" {
+		fmt.Println(val)
+	}
 
 	return nil
 }
