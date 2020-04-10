@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -165,9 +164,6 @@ func (c *fileConfig) Editor() (string, error) {
 
 	editorValue := editorEntry.Value
 
-	if !filepath.IsAbs(editorValue) {
-		return "", fmt.Errorf("editor should be an absolute path; got: %s", editorValue)
-	}
 	c.editor = editorValue
 
 	return editorValue, nil
