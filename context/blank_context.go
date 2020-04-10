@@ -1,6 +1,7 @@
 package context
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -20,6 +21,10 @@ type blankContext struct {
 	branch    string
 	baseRepo  ghrepo.Interface
 	remotes   Remotes
+}
+
+func (c *blankContext) Config() (Config, error) {
+	return nil, errors.New("todo implement BlankConfig")
 }
 
 func (c *blankContext) AuthToken() (string, error) {
