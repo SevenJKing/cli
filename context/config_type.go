@@ -15,6 +15,7 @@ type Config interface {
 	ConfigForHost(string) (*HostConfig, error)
 	DefaultHostConfig() (*HostConfig, error)
 	Get(string) (string, error)
+	Set(string) error
 	FindEntry(string) (*yaml.Node, error)
 }
 
@@ -93,6 +94,7 @@ func parseHosts(hostsEntry *yaml.Node) ([]*HostConfig, error) {
 }
 
 func get(c Config, key string) (string, error) {
+	// TODO this shared function is gross
 	switch key {
 	case "editor":
 		return c.Editor()
@@ -112,6 +114,21 @@ func get(c Config, key string) (string, error) {
 
 func (c *fileConfig) Get(key string) (string, error) {
 	return get(c, key)
+}
+
+func (c *fileConfig) Set(key, value string) error {
+	entry, err := c.FindEntry(key)
+
+	// TODO finally handle not found properly.
+	if err != nil { // OR != not found
+		return err
+	}
+
+	// if not found
+	//    add new key to top level
+	// else
+	//    set new value
+	// write out config, potentially migrating
 }
 
 func (c *fileConfig) FindEntry(key string) (*yaml.Node, error) {

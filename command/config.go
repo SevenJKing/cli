@@ -60,12 +60,24 @@ func configSet(cmd *cobra.Command, args []string) error {
 	if len(args) != 2 {
 		return errors.New("need to pass a key and a value")
 	}
+
 	key := args[0]
 	value := args[1]
+
+	ctx := contextForCommand(cmd)
+
+	cfg, err := ctx.Config()
+	if err != nil {
+		return err
+	}
 	// TODO NOTES
 	// to write a config back out you can do yaml.Marshal(&root). it will serialize the root itself if
 	// you don't pass a pointer. to mutate the parsed yaml, root.Content[0].Content[i+1].Value = "LOL"
-	fmt.Println("setting", key, "to", value)
+
+	err = cfg.Set(key, value)
+	if err != nil {
+		return fmt.Errorf("failed to set %q to %q: %s", key, value, err)
+	}
 
 	return nil
 }
