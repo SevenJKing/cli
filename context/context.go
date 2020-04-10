@@ -22,6 +22,7 @@ type Context interface {
 	Remotes() (Remotes, error)
 	BaseRepo() (ghrepo.Interface, error)
 	SetBaseRepo(string)
+	Config() (Config, error)
 }
 
 // cap the number of git remotes looked up, since the user might have an
@@ -167,7 +168,7 @@ func configFile() string {
 	return path.Join(ConfigDir(), "config.yml")
 }
 
-func (c *fsContext) getConfig() (Config, error) {
+func (c *fsContext) Config() (Config, error) {
 	if c.config == nil {
 		config, err := parseOrSetupConfigFile(configFile())
 		if err != nil {
@@ -184,7 +185,7 @@ func (c *fsContext) AuthToken() (string, error) {
 		return c.authToken, nil
 	}
 
-	config, err := c.getConfig()
+	config, err := c.Config()
 	if err != nil {
 		return "", err
 	}
@@ -198,7 +199,7 @@ func (c *fsContext) SetAuthToken(t string) {
 }
 
 func (c *fsContext) AuthLogin() (string, error) {
-	config, err := c.getConfig()
+	config, err := c.Config()
 	if err != nil {
 		return "", err
 	}

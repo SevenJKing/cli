@@ -15,6 +15,8 @@ type Config interface {
 	Hosts() ([]*HostConfig, error)
 	ConfigForHost(string) (*HostConfig, error)
 	DefaultHostConfig() (*HostConfig, error)
+	Get(string) (string, error)
+	FindEntry(string) (*yaml.Node, error)
 }
 
 const defaultHostname = "github.com"
@@ -91,7 +93,29 @@ func parseHosts(hostsEntry *yaml.Node) ([]*HostConfig, error) {
 	return hostConfigs, nil
 }
 
-func (c *fileConfig) findEntry(key string) (*yaml.Node, error) {
+func get(c Config, key string) (string, error) {
+	switch key {
+	case "editor":
+		return c.Editor()
+	case "git_protocol":
+		return c.GitProtocol()
+	default:
+		entry, err := c.FindEntry(key)
+		if err != nil {
+			return "", err
+		}
+		if err == nil && entry == nil {
+			return "", nil
+		}
+		return entry.Value, nil
+	}
+}
+
+func (c *fileConfig) Get(key string) (string, error) {
+	return get(c, key)
+}
+
+func (c *fileConfig) FindEntry(key string) (*yaml.Node, error) {
 	topLevelKeys := c.Root.Content[0].Content
 	var entry *yaml.Node
 	for i, v := range topLevelKeys {
@@ -113,7 +137,7 @@ func (c *fileConfig) Hosts() ([]*HostConfig, error) {
 		return c.hosts, nil
 	}
 
-	hostsEntry, err := c.findEntry("hosts")
+	hostsEntry, err := c.FindEntry("hosts")
 	if err != nil {
 		return nil, fmt.Errorf("could not find hosts config: %s", err)
 	}
@@ -134,7 +158,7 @@ func (c *fileConfig) Editor() (string, error) {
 	}
 
 	// if we can't find editor, we don't worry about it. empty string means to respect environment.
-	editorEntry, _ := c.findEntry("editor")
+	editorEntry, _ := c.FindEntry("editor")
 	if editorEntry == nil {
 		return "", nil
 	}
@@ -153,7 +177,7 @@ func (c *fileConfig) GitProtocol() (string, error) {
 	if c.gitProtocol != "" {
 		return c.gitProtocol, nil
 	}
-	gitProtocolEntry, err := c.findEntry("git_protocol")
+	gitProtocolEntry, err := c.FindEntry("git_protocol")
 	gitProtocolValue := ""
 	if err != nil {
 		// TODO do not warn if merely not found
@@ -177,12 +201,20 @@ type LegacyConfig struct {
 	hosts []*HostConfig
 }
 
+func (lc *LegacyConfig) Get(key string) (string, error) {
+	return get(lc, key)
+}
+
 func (lc *LegacyConfig) Editor() (string, error) {
 	return "", nil
 }
 
 func (lc *LegacyConfig) GitProtocol() (string, error) {
 	return "https", nil
+}
+
+func (lc *LegacyConfig) FindEntry(key string) (*yaml.Node, error) {
+	return nil, nil
 }
 
 func (lc *LegacyConfig) ConfigForHost(hostname string) (*HostConfig, error) {
